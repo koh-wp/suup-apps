@@ -22,25 +22,33 @@ header{display:flex;align-items:center;justify-content:space-between;gap:10px}.t
 <body><main class="app">
 <header><div class="title">卵の重さを調べよう</div><div id="stats" class="stats">もんだい 0/4</div></header><div class="progress"><div id="bar" class="bar"></div></div>
 <section id="start" class="card"><h1 class="big">ドットプロット</h1><p class="lead">10個の卵の重さを見て、<br>重さの特ちょうを答えよう！</p><button id="startBtn" class="btn">はじめる</button><div id="startRecord" class="record"></div></section>
-<section id="game" class="card hidden"><div class="data">卵の重さ（g）<br><span class="numbers">57　63　60　58　58　63　64　59　58　60</span></div><div id="plot" class="plot"></div><div class="stage"><div id="question" class="question"></div><div id="choices" class="choices"></div></div><div id="msg" class="msg">答えを選ぼう</div></section>
+<section id="game" class="card hidden"><div class="data">卵の重さ（g）<br><span id="numbers" class="numbers"></span></div><div id="plot" class="plot"></div><div class="stage"><div id="question" class="question"></div><div id="choices" class="choices"></div></div><div id="msg" class="msg">答えを選ぼう</div></section>
 <section id="finish" class="card hidden"><h2 class="big">全問正解！</h2><p class="lead">ドットプロットから、重さの特ちょうを読み取れたね！</p><button id="againBtn" class="btn">もういちど</button><div id="finishRecord" class="record"></div></section>
 </main><script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),K='tamagoDotplot_v1';
-const values=[57,63,60,58,58,63,64,59,58,60];
-const questions=[
- {q:'① いちばん重い卵は何gですか？',a:'64g',o:['63g','64g','65g','60g'],hint:'いちばん右にある点を見よう。'},
- {q:'② 10個の重さの合計は600gです。平均値は何gですか？',a:'60g',o:['58g','59g','60g','61g'],hint:'600÷10で求めよう。'},
- {q:'③ 最頻値は何gですか？',a:'58g',o:['57g','58g','60g','63g'],hint:'点がいちばん多く積み重なっている重さだよ。'},
- {q:'④ 中央値は何gですか？',a:'59.5g',o:['58.5g','59g','59.5g','60g'],hint:'小さい順に並べた、5番目と6番目の平均だよ。'}
+const patterns=[
+ [-4,-2,-2,-2,-1,0,1,2,3,5],
+ [-5,-3,-1,0,0,0,1,2,2,4],
+ [-6,-3,-1,-1,-1,0,1,2,4,5],
+ [-4,-4,-4,-1,0,1,2,3,3,4]
 ];
-let i=0,locked=false;
+const centers=[50,55,60,65,70];
+let values=[],questions=[],i=0,locked=false,lastKey='';
 function load(){try{return JSON.parse(localStorage.getItem(K))||{plays:0,points:0}}catch(e){return{plays:0,points:0}}}
 function save(d){localStorage.setItem(K,JSON.stringify(d))}
 function show(el){[$('start'),$('game'),$('finish')].forEach(x=>x.classList.add('hidden'));el.classList.remove('hidden')}
 function record(){const d=load();return 'ちょうせん '+d.plays+'回　｜　ごうけい '+d.points+'ポイント'}
-function drawPlot(){const min=55,max=65,counts={};values.forEach(v=>counts[v]=(counts[v]||0)+1);let h='<div class="plot-title">ドットプロット</div><div class="plot-area"><div class="axis"></div>';for(let n=min;n<=max;n++){const x=(n-min)/(max-min)*100;h+='<i class="tick" style="left:'+x+'%"></i><span class="tick-label" style="left:'+x+'%">'+n+'</span>';for(let k=0;k<(counts[n]||0);k++)h+='<span class="dot" style="left:'+x+'%;bottom:'+(43+k*30)+'px">'+(k+1)+'</span>'}h+='</div>';$('plot').innerHTML=h}
-function start(){i=0;show($('game'));drawPlot();render()}
+function fmt(n){return Number.isInteger(n)?String(n):n.toFixed(1)}
+function options(answer,candidates){const a=fmt(answer)+'g',s=new Set([a]);for(const n of candidates){s.add(fmt(n)+'g');if(s.size===4)break}for(let d=1;s.size<4;d++)s.add(fmt(answer+d)+'g');return [...s]}
+function makeProblem(){let key,p,c;do{p=Math.floor(Math.random()*patterns.length);c=centers[Math.floor(Math.random()*centers.length)];key=p+'-'+c}while(key===lastKey);lastKey=key;values=patterns[p].map(n=>n+c).sort(()=>Math.random()-.5);const sorted=[...values].sort((a,b)=>a-b),sum=values.reduce((a,b)=>a+b,0),mean=sum/10,median=(sorted[4]+sorted[5])/2,counts={};values.forEach(v=>counts[v]=(counts[v]||0)+1);const mode=Number(Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0]),max=Math.max(...values);questions=[
+ {q:'① いちばん重い卵は何gですか？',a:fmt(max)+'g',o:options(max,[max-1,max+1,mean,mode]),hint:'いちばん右にある点を見よう。'},
+ {q:'② 10個の重さの合計は'+sum+'gです。平均値は何gですか？',a:fmt(mean)+'g',o:options(mean,[mean-1,mean+1,median,mode]),hint:sum+'÷10で求めよう。'},
+ {q:'③ 最頻値は何gですか？',a:fmt(mode)+'g',o:options(mode,[mode-1,mode+1,mean,median]),hint:'点がいちばん多く積み重なっている重さだよ。'},
+ {q:'④ 中央値は何gですか？',a:fmt(median)+'g',o:options(median,[median-.5,median+.5,mean,mode]),hint:'小さい順に並べた、5番目と6番目の平均だよ。'}
+];$('numbers').textContent=values.join('　')}
+function drawPlot(){const lo=Math.min(...values)-1,hi=Math.max(...values)+1,counts={};values.forEach(v=>counts[v]=(counts[v]||0)+1);let h='<div class="plot-title">ドットプロット</div><div class="plot-area"><div class="axis"></div>';for(let n=lo;n<=hi;n++){const x=(n-lo)/(hi-lo)*100;h+='<i class="tick" style="left:'+x+'%"></i><span class="tick-label" style="left:'+x+'%">'+n+'</span>';for(let k=0;k<(counts[n]||0);k++)h+='<span class="dot" style="left:'+x+'%;bottom:'+(43+k*30)+'px">'+(k+1)+'</span>'}h+='</div>';$('plot').innerHTML=h}
+function start(){i=0;makeProblem();show($('game'));drawPlot();render()}
 function render(){locked=false;const x=questions[i];$('stats').textContent='もんだい '+(i+1)+'/4　｜　ポイント '+load().points;$('bar').style.width=(i/4*100)+'%';$('question').textContent=x.q;$('choices').innerHTML='';$('msg').className='msg';$('msg').textContent='答えを選ぼう';[...x.o].sort(()=>Math.random()-.5).forEach(v=>{const b=document.createElement('button');b.className='choice';b.textContent=v;b.onclick=()=>answer(b,v,x);$('choices').appendChild(b)})}
 function answer(btn,v,x){if(locked)return;if(v!==x.a){btn.classList.add('wrong');$('msg').className='msg bad';$('msg').textContent=x.hint;setTimeout(()=>btn.classList.remove('wrong'),500);return}locked=true;btn.classList.add('correct');[...$('choices').children].forEach(b=>b.disabled=true);$('msg').className='msg good';$('msg').textContent='せいかい！';const d=load();d.points++;save(d);setTimeout(()=>{i++;if(i<4)render();else finish()},700)}
 function finish(){const d=load();d.plays++;save(d);$('stats').textContent='もんだい 4/4　｜　ポイント '+d.points;$('bar').style.width='100%';$('finishRecord').innerHTML=record();show($('finish'))}
